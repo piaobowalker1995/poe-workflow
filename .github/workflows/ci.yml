@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    # windows-latest：poe-workflow 的 UI 层依赖 PyQt5；测试在 offscreen 平台下跑，
+    # 不需要真实显示环境。内核层单测无需 GUI。
+    runs-on: windows-latest
+
+    # 强制 Qt 走 offscreen 平台插件：CI runner 是无显示（headless）环境，
+    # QApplication 构造必须在已有该变量时进行，否则会报 qapp 加载失败。
+    env:
+      QT_QPA_PLATFORM: offscreen
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: 升级 pip
+        run: python -m pip install --upgrade pip
+
+      # 安装本仓（可编辑）+ UI 层依赖 PyQt5 + 测试工具。
+      # 内核（workflow_model / workflow_engine / protocols）为零依赖纯 Python，
+      # 但 UI 簇（poe_workflow/ui）需要 PyQt5，故用 [ui] extra。
+      - name: 安装依赖
+        run: pip install -e ".[ui]" pytest pytest-qt
+
+      # 语法/解析级错误门禁（阻断）。
+      - name: ruff 语法门禁
+        run: pip install ruff && ruff check . --select E9
+
+      # 全量 ruff 报告（非阻断）：现有存量问题集中为注解现代化/未用导入/排序等，
+      # 待单独 lint 收口后改为硬门禁 `ruff check .`。
+      - name: ruff 全量报告（非阻断）
+        run: ruff check . --exit-zero
+
+      # 单元测试。tests/conftest.py 已内置 modules/ui 桩（tests/_stubs），
+      # 不依赖 poe-mapmaker 仓库即可全量回归（505 用例）。
+      - name: 单元测试
+        run: pytest poe_workflow/tests/ -q
