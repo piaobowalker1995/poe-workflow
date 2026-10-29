@@ -1,0 +1,9 @@
+{
+  "name": "示例：点通货仓锚点并读剪贴板",
+  "version": 1,
+  "steps": [
+    {"id": "s1", "primitive": "click_anchor", "params": {"anchor": "currency_base_point"}},
+    {"id": "s2", "primitive": "read_clipboard", "params": {"timeout_ms": 500}},
+    {"id": "s3", "primitive": "wait_ms", "params": {"ms": 100}}
+  ]
+}

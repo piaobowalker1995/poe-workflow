@@ -1,0 +1,417 @@
+{
+  "name": "预置·制图流程（全量复刻）",
+  "version": 1,
+  "steps": [
+    {
+      "id": "intro",
+      "kind": "action",
+      "primitive": "log",
+      "params": {"message": "开始制图。前提：游戏窗口前台；已校准 背包首格基准点/仓库页签/通货(知识卷轴/点金石/瓦尔宝珠)；仓库页1=成品仓、仓库页2=废图仓（页号/词缀示例请在编辑器中按需修改）"},
+      "on_error": "abort",
+      "delay_ms": 0
+    },
+    {
+      "id": "grid",
+      "kind": "loop",
+      "grid": {
+        "anchor": "inv_first_cell_base_point",
+        "dx": 0,
+        "dy": 0,
+        "cols": 12,
+        "rows": 5,
+        "cell_dx": 39,
+        "cell_dy": 39
+      },
+      "delay_ms": 50,
+      "on_error": "abort",
+      "body": [
+        {
+          "id": "warm",
+          "kind": "action",
+          "primitive": "wait_ms",
+          "params": {"ms": 250},
+          "on_error": "abort",
+          "delay_ms": 0
+        },
+        {
+          "id": "snap",
+          "kind": "action",
+          "primitive": "copy",
+          "params": {"store_as": "clipboard"},
+          "on_error": "abort",
+          "delay_ms": 0
+        },
+        {
+          "id": "unid_chk",
+          "kind": "branch",
+          "condition": {"source": "clipboard", "op": "contains", "value": "未鉴定"},
+          "on_error": "abort",
+          "then_steps": [
+            {
+              "id": "unid_log",
+              "kind": "action",
+              "primitive": "log",
+              "params": {"message": "未鉴定地图 → 知识卷轴鉴定"},
+              "on_error": "skip",
+              "delay_ms": 0
+            },
+            {
+              "id": "unid_pick",
+              "kind": "action",
+              "primitive": "move_to_anchor",
+              "params": {"anchor": "通货:知识卷轴"},
+              "on_error": "abort",
+              "delay_ms": 50
+            },
+            {
+              "id": "unid_rclick",
+              "kind": "action",
+              "primitive": "press_key",
+              "params": {"key": "mouse_right"},
+              "on_error": "abort",
+              "delay_ms": 50
+            },
+            {
+              "id": "unid_back",
+              "kind": "action",
+              "primitive": "recall_cell",
+              "params": {},
+              "on_error": "abort",
+              "delay_ms": 50
+            },
+            {
+              "id": "unid_apply",
+              "kind": "action",
+              "primitive": "press_key",
+              "params": {"key": "mouse_left"},
+              "on_error": "abort",
+              "delay_ms": 50
+            },
+            {
+              "id": "unid_wait",
+              "kind": "action",
+              "primitive": "wait_ms",
+              "params": {"ms": 500},
+              "on_error": "abort",
+              "delay_ms": 0
+            },
+            {
+              "id": "unid_resnap",
+              "kind": "action",
+              "primitive": "copy",
+              "params": {"store_as": "clipboard"},
+              "on_error": "abort",
+              "delay_ms": 0
+            }
+          ],
+          "else_steps": []
+        },
+        {
+          "id": "refine",
+          "kind": "loop",
+          "count": 5,
+          "delay_ms": 0,
+          "on_error": "abort",
+          "body": [
+            {
+              "id": "refine_chk",
+              "kind": "branch",
+              "condition": {"source": "clipboard", "op": "contains", "value": "稀有度: 稀有"},
+              "on_error": "abort",
+              "then_steps": [],
+              "else_steps": [
+                {
+                  "id": "refine_log",
+                  "kind": "action",
+                  "primitive": "log",
+                  "params": {"message": "未达稀有 → 点金石点金"},
+                  "on_error": "skip",
+                  "delay_ms": 0
+                },
+                {
+                  "id": "refine_pick",
+                  "kind": "action",
+                  "primitive": "move_to_anchor",
+                  "params": {"anchor": "通货:点金石"},
+                  "on_error": "abort",
+                  "delay_ms": 50
+                },
+                {
+                  "id": "refine_rclick",
+                  "kind": "action",
+                  "primitive": "press_key",
+                  "params": {"key": "mouse_right"},
+                  "on_error": "abort",
+                  "delay_ms": 50
+                },
+                {
+                  "id": "refine_back",
+                  "kind": "action",
+                  "primitive": "recall_cell",
+                  "params": {},
+                  "on_error": "abort",
+                  "delay_ms": 50
+                },
+                {
+                  "id": "refine_apply",
+                  "kind": "action",
+                  "primitive": "press_key",
+                  "params": {"key": "mouse_left"},
+                  "on_error": "abort",
+                  "delay_ms": 50
+                },
+                {
+                  "id": "refine_wait",
+                  "kind": "action",
+                  "primitive": "wait_ms",
+                  "params": {"ms": 400},
+                  "on_error": "abort",
+                  "delay_ms": 0
+                },
+                {
+                  "id": "refine_resnap",
+                  "kind": "action",
+                  "primitive": "copy",
+                  "params": {"store_as": "clipboard"},
+                  "on_error": "abort",
+                  "delay_ms": 0
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "rare_chk",
+          "kind": "branch",
+          "condition": {"source": "clipboard", "op": "contains", "value": "稀有度: 稀有"},
+          "on_error": "abort",
+          "then_steps": [
+            {
+              "id": "corrupt_log",
+              "kind": "action",
+              "primitive": "log",
+              "params": {"message": "进入腐化：腐化前文本记 ctx[before]，腐化后记 ctx[after]"},
+              "on_error": "skip",
+              "delay_ms": 0
+            },
+            {
+              "id": "corrupt_before",
+              "kind": "action",
+              "primitive": "copy",
+              "params": {"store_as": "before"},
+              "on_error": "abort",
+              "delay_ms": 0
+            },
+            {
+              "id": "corrupt",
+              "kind": "action",
+              "primitive": "move_to_anchor",
+              "params": {"anchor": "通货:瓦尔宝珠"},
+              "on_error": "abort",
+              "delay_ms": 50
+            },
+            {
+              "id": "corrupt_rclick",
+              "kind": "action",
+              "primitive": "press_key",
+              "params": {"key": "mouse_right"},
+              "on_error": "abort",
+              "delay_ms": 50
+            },
+            {
+              "id": "corrupt_back",
+              "kind": "action",
+              "primitive": "recall_cell",
+              "params": {},
+              "on_error": "abort",
+              "delay_ms": 50
+            },
+            {
+              "id": "corrupt_apply",
+              "kind": "action",
+              "primitive": "press_key",
+              "params": {"key": "mouse_left"},
+              "on_error": "abort",
+              "delay_ms": 50
+            },
+            {
+              "id": "corrupt_wait",
+              "kind": "action",
+              "primitive": "wait_ms",
+              "params": {"ms": 600},
+              "on_error": "abort",
+              "delay_ms": 0
+            },
+            {
+              "id": "corrupt_resnap",
+              "kind": "action",
+              "primitive": "copy",
+              "params": {"store_as": "after"},
+              "on_error": "abort",
+              "delay_ms": 0
+            },
+            {
+              "id": "corrupt_chk",
+              "kind": "branch",
+              "condition": {"source": "ctx", "key": "after", "op": "contains", "value": "已腐化"},
+              "on_error": "abort",
+              "then_steps": [
+                {
+                  "id": "blacklist_chk",
+                  "kind": "branch",
+                  "condition": {"source": "ctx", "key": "after", "op": "contains", "value": "反射"},
+                  "on_error": "abort",
+                  "then_steps": [
+                    {
+                      "id": "bl_log",
+                      "kind": "action",
+                      "primitive": "log",
+                      "params": {"message": "命中黑名单词缀(示例:反射) → 废图仓"},
+                      "on_error": "skip",
+                      "delay_ms": 0
+                    },
+                    {
+                      "id": "bl_store",
+                      "kind": "action",
+                      "primitive": "click_anchor",
+                      "params": {"anchor": "仓库页2"},
+                      "on_error": "abort",
+                      "delay_ms": 100
+                    },
+                    {
+                      "id": "bl_back",
+                      "kind": "action",
+                      "primitive": "recall_cell",
+                      "params": {},
+                      "on_error": "abort",
+                      "delay_ms": 50
+                    },
+                    {
+                      "id": "bl_move",
+                      "kind": "action",
+                      "primitive": "press_key",
+                      "params": {"key": "ctrl+mouse_left"},
+                      "on_error": "abort",
+                      "delay_ms": 100
+                    }
+                  ],
+                  "else_steps": [
+                    {
+                      "id": "ok_log",
+                      "kind": "action",
+                      "primitive": "log",
+                      "params": {"message": "腐化成功且无黑名单 → 成品仓"},
+                      "on_error": "skip",
+                      "delay_ms": 0
+                    },
+                    {
+                      "id": "ok_store",
+                      "kind": "action",
+                      "primitive": "click_anchor",
+                      "params": {"anchor": "仓库页1"},
+                      "on_error": "abort",
+                      "delay_ms": 100
+                    },
+                    {
+                      "id": "ok_back",
+                      "kind": "action",
+                      "primitive": "recall_cell",
+                      "params": {},
+                      "on_error": "abort",
+                      "delay_ms": 50
+                    },
+                    {
+                      "id": "ok_move",
+                      "kind": "action",
+                      "primitive": "press_key",
+                      "params": {"key": "ctrl+mouse_left"},
+                      "on_error": "abort",
+                      "delay_ms": 100
+                    }
+                  ]
+                }
+              ],
+              "else_steps": [
+                {
+                  "id": "cfail_log",
+                  "kind": "action",
+                  "primitive": "log",
+                  "params": {"message": "腐化未生效（剪贴板未见已腐化），本格跳过"},
+                  "on_error": "skip",
+                  "delay_ms": 0
+                }
+              ]
+            }
+          ],
+          "else_steps": [
+            {
+              "id": "low_log",
+              "kind": "action",
+              "primitive": "log",
+              "params": {"message": "点金后仍未达稀有 → 存废图仓"},
+              "on_error": "skip",
+              "delay_ms": 0
+            },
+            {
+              "id": "low_store",
+              "kind": "action",
+              "primitive": "click_anchor",
+              "params": {"anchor": "仓库页2"},
+              "on_error": "abort",
+              "delay_ms": 100
+            },
+            {
+              "id": "low_back",
+              "kind": "action",
+              "primitive": "recall_cell",
+              "params": {},
+              "on_error": "abort",
+              "delay_ms": 50
+            },
+            {
+              "id": "low_move",
+              "kind": "action",
+              "primitive": "press_key",
+              "params": {"key": "ctrl+mouse_left"},
+              "on_error": "abort",
+              "delay_ms": 100
+            }
+          ]
+        },
+        {
+          "id": "row_end_chk",
+          "kind": "branch",
+          "condition": {"source": "ctx", "key": "__grid_col", "op": "equals", "value": "11"},
+          "on_error": "abort",
+          "then_steps": [
+            {
+              "id": "row_end_log",
+              "kind": "action",
+              "primitive": "log",
+              "params": {"message": "本行(12格)处理完毕 → 收尾"},
+              "on_error": "skip",
+              "delay_ms": 0
+            },
+            {
+              "id": "row_end_wait",
+              "kind": "action",
+              "primitive": "wait_ms",
+              "params": {"ms": 300},
+              "on_error": "abort",
+              "delay_ms": 0
+            }
+          ],
+          "else_steps": []
+        }
+      ]
+    },
+    {
+      "id": "outro",
+      "kind": "action",
+      "primitive": "log",
+      "params": {"message": "制图流程结束：背包遍历完毕"},
+      "on_error": "skip",
+      "delay_ms": 0
+    }
+  ]
+}

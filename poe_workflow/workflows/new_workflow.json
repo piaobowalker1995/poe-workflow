@@ -1,0 +1,93 @@
+{
+  "name": "新方案",
+  "version": 1,
+  "steps": [
+    {
+      "id": "1",
+      "kind": "action",
+      "primitive": "move_to_anchor",
+      "params": {
+        "anchor": "inv_first_cell_base_point"
+      },
+      "on_error": "abort",
+      "retry_count": 0,
+      "retry_delay_ms": 0,
+      "delay_ms": 50
+    },
+    {
+      "id": "2",
+      "kind": "action",
+      "primitive": "press_key",
+      "params": {
+        "key": "ctrl+c"
+      },
+      "on_error": "skip",
+      "retry_count": 0,
+      "retry_delay_ms": 0,
+      "delay_ms": 50
+    },
+    {
+      "id": "3",
+      "kind": "branch",
+      "on_error": "skip",
+      "retry_count": 0,
+      "retry_delay_ms": 0,
+      "condition": {
+        "source": "clipboard",
+        "op": "ge",
+        "value": "70",
+        "rule": "item_quantity"
+      },
+      "then_steps": [
+        {
+          "id": "3.1",
+          "kind": "action",
+          "primitive": "move_to_anchor",
+          "params": {
+            "anchor": "瓦尔宝珠"
+          },
+          "on_error": "abort",
+          "retry_count": 0,
+          "retry_delay_ms": 0,
+          "delay_ms": 50
+        },
+        {
+          "id": "3.2",
+          "kind": "action",
+          "primitive": "press_key",
+          "params": {
+            "key": "mouse_right"
+          },
+          "on_error": "abort",
+          "retry_count": 0,
+          "retry_delay_ms": 0
+        },
+        {
+          "id": "3.3",
+          "kind": "action",
+          "primitive": "move_to_anchor",
+          "params": {
+            "anchor": "inv_first_cell_base_point"
+          },
+          "on_error": "abort",
+          "retry_count": 0,
+          "retry_delay_ms": 0,
+          "delay_ms": 50
+        },
+        {
+          "id": "3.4",
+          "kind": "action",
+          "primitive": "press_key",
+          "params": {
+            "key": ""
+          },
+          "on_error": "abort",
+          "retry_count": 0,
+          "retry_delay_ms": 0,
+          "delay_ms": 50
+        }
+      ],
+      "else_steps": []
+    }
+  ]
+}

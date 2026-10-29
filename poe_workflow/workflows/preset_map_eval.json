@@ -1,0 +1,199 @@
+{
+  "name": "预置·地图评估（对比评估模块）",
+  "version": 2,
+  "steps": [
+    {
+      "id": "intro",
+      "kind": "action",
+      "primitive": "log",
+      "params": {
+        "message": "地图评估模块 v2：复制悬停物品 → 三档评估 → 按腐化开关分流。三档结论：①优秀=物品数量≥优秀线(默认100)且 any[黑名单命中,白名单未中]（高参数瑕疵图，有重铸/瓦尔价值，不一棍子打死）②合格=all[T阶/稀有度/参数/白名单/黑名单] ③废图=其余。腐化开关[Strategy] enable_corruption 开：优秀/合格图先腐化(瓦尔宝珠)再复查，复查仍优秀→瑕疵仓、合格→成品仓、都不占→废图仓；开关关：优秀→瑕疵仓、合格→半成品仓(未腐化合格图)、废图→废图仓。所有去向只存 StashMapping 键名，页签索引在「仓库管理」页按需调整（不写死页号）。改优秀线：keep/post_eval 条件里「物品数量」比较值(默认100，可120)；改合格线：同条件的 map_tier 等。腐化用通货名/坐标在 use_currency 步改。"
+      },
+      "on_error": "abort",
+      "delay_ms": 0
+    },
+    {
+      "id": "snap",
+      "kind": "action",
+      "primitive": "copy",
+      "params": {"store_as": "clipboard"},
+      "on_error": "abort",
+      "delay_ms": 100
+    },
+    {
+      "id": "keep",
+      "kind": "branch",
+      "condition": {
+        "any": [
+          {"all": [
+            {"source": "clipboard", "rule": "item_quantity", "op": "ge", "value": "100"},
+            {"any": [
+              {"source": "affix", "key": "blacklist_hit", "op": "equals", "value": "True"},
+              {"source": "affix", "key": "whitelist_pass", "op": "equals", "value": "False"}
+            ]}
+          ]},
+          {"all": [
+            {"source": "clipboard", "rule": "map_tier", "op": "ge", "value": "15"},
+            {"source": "rarity", "op": "equals", "value": "rare"},
+            {"source": "affix", "key": "params_pass", "op": "equals", "value": "True"},
+            {"source": "affix", "key": "whitelist_pass", "op": "equals", "value": "True"},
+            {"source": "affix", "key": "blacklist_hit", "op": "equals", "value": "False"}
+          ]}
+        ]
+      },
+      "on_error": "abort",
+      "delay_ms": 0,
+      "then_steps": [
+        {
+          "id": "corrupt_gate",
+          "kind": "branch",
+          "condition": {
+            "source": "config",
+            "section": "Strategy",
+            "key": "enable_corruption",
+            "op": "equals",
+            "value": "true"
+          },
+          "on_error": "abort",
+          "delay_ms": 0,
+          "then_steps": [
+            {
+              "id": "vaal",
+              "kind": "action",
+              "primitive": "use_currency",
+              "params": {"currency": "瓦尔宝珠"},
+              "on_error": "abort",
+              "delay_ms": 100
+            },
+            {
+              "id": "snap2",
+              "kind": "action",
+              "primitive": "copy",
+              "params": {"store_as": "clipboard"},
+              "on_error": "abort",
+              "delay_ms": 100
+            },
+            {
+              "id": "post_eval",
+              "kind": "branch",
+              "condition": {
+                "any": [
+                  {"all": [
+                    {"source": "clipboard", "rule": "item_quantity", "op": "ge", "value": "100"},
+                    {"any": [
+                      {"source": "affix", "key": "blacklist_hit", "op": "equals", "value": "True"},
+                      {"source": "affix", "key": "whitelist_pass", "op": "equals", "value": "False"}
+                    ]}
+                  ]},
+                  {"all": [
+                    {"source": "clipboard", "rule": "map_tier", "op": "ge", "value": "15"},
+                    {"source": "rarity", "op": "equals", "value": "rare"},
+                    {"source": "affix", "key": "params_pass", "op": "equals", "value": "True"},
+                    {"source": "affix", "key": "whitelist_pass", "op": "equals", "value": "True"},
+                    {"source": "affix", "key": "blacklist_hit", "op": "equals", "value": "False"}
+                  ]}
+                ]
+              },
+              "on_error": "abort",
+              "delay_ms": 0,
+              "then_steps": [
+                {
+                  "id": "post_tier",
+                  "kind": "branch",
+                  "condition": {
+                    "all": [
+                      {"source": "clipboard", "rule": "item_quantity", "op": "ge", "value": "100"},
+                      {"any": [
+                        {"source": "affix", "key": "blacklist_hit", "op": "equals", "value": "True"},
+                        {"source": "affix", "key": "whitelist_pass", "op": "equals", "value": "False"}
+                      ]}
+                    ]
+                  },
+                  "on_error": "abort",
+                  "delay_ms": 0,
+                  "then_steps": [
+                    {
+                      "id": "post_flawed",
+                      "kind": "action",
+                      "primitive": "store_to_stash",
+                      "params": {"stash_key": "flawed_map_stash"},
+                      "on_error": "abort",
+                      "delay_ms": 100
+                    }
+                  ],
+                  "else_steps": [
+                    {
+                      "id": "post_finished",
+                      "kind": "action",
+                      "primitive": "store_to_stash",
+                      "params": {"stash_key": "finished_map_stash"},
+                      "on_error": "abort",
+                      "delay_ms": 100
+                    }
+                  ]
+                }
+              ],
+              "else_steps": [
+                {
+                  "id": "post_waste",
+                  "kind": "action",
+                  "primitive": "store_to_stash",
+                  "params": {"stash_key": "waste_map_stash"},
+                  "on_error": "abort",
+                  "delay_ms": 100
+                }
+              ]
+            }
+          ],
+          "else_steps": [
+            {
+              "id": "pre_tier",
+              "kind": "branch",
+              "condition": {
+                "all": [
+                  {"source": "clipboard", "rule": "item_quantity", "op": "ge", "value": "100"},
+                  {"any": [
+                    {"source": "affix", "key": "blacklist_hit", "op": "equals", "value": "True"},
+                    {"source": "affix", "key": "whitelist_pass", "op": "equals", "value": "False"}
+                  ]}
+                ]
+              },
+              "on_error": "abort",
+              "delay_ms": 0,
+              "then_steps": [
+                {
+                  "id": "pre_flawed",
+                  "kind": "action",
+                  "primitive": "store_to_stash",
+                  "params": {"stash_key": "flawed_map_stash"},
+                  "on_error": "abort",
+                  "delay_ms": 100
+                }
+              ],
+              "else_steps": [
+                {
+                  "id": "pre_semi",
+                  "kind": "action",
+                  "primitive": "store_to_stash",
+                  "params": {"stash_key": "semi_finished_stash"},
+                  "on_error": "abort",
+                  "delay_ms": 100
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "else_steps": [
+        {
+          "id": "waste_direct",
+          "kind": "action",
+          "primitive": "store_to_stash",
+          "params": {"stash_key": "waste_map_stash"},
+          "on_error": "abort",
+          "delay_ms": 100
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,93 @@
+{
+  "name": "稀有地图重铸决策（示例）",
+  "version": 1,
+  "schema_version": "1.0",
+  "steps": [
+    {
+      "id": "1",
+      "kind": "action",
+      "primitive": "copy",
+      "params": {"store_as": "clipboard"},
+      "on_error": "retry",
+      "delay_ms": 0
+    },
+    {
+      "id": "2",
+      "kind": "branch",
+      "condition": {"source": "session", "key": "ok", "op": "equals", "value": false},
+      "then_steps": [
+        {
+          "id": "2.1",
+          "kind": "action",
+          "primitive": "pause",
+          "params": {"note": "会话限速已达上限，暂停等待人工确认后继续"},
+          "on_error": "retry",
+          "delay_ms": 0
+        }
+      ],
+      "else_steps": [],
+      "on_error": "retry",
+      "delay_ms": 0
+    },
+    {
+      "id": "3",
+      "kind": "branch",
+      "condition": {"source": "rarity", "op": "equals", "value": "rare"},
+      "then_steps": [
+        {
+          "id": "3.1",
+          "kind": "loop",
+          "condition": {"source": "affix", "key": "final_decision", "op": "equals", "value": "accept"},
+          "body": [
+            {
+              "id": "3.1.1",
+              "kind": "action",
+              "primitive": "use_currency",
+              "params": {"currency": "重铸石", "target": "map_cell"},
+              "on_error": "retry",
+              "delay_ms": 0
+            },
+            {
+              "id": "3.1.2",
+              "kind": "action",
+              "primitive": "copy",
+              "params": {"store_as": "clipboard"},
+              "on_error": "retry",
+              "delay_ms": 0
+            }
+          ],
+          "on_error": "retry",
+          "delay_ms": 0
+        },
+        {
+          "id": "3.2",
+          "kind": "action",
+          "primitive": "record_session",
+          "params": {},
+          "on_error": "retry",
+          "delay_ms": 0
+        },
+        {
+          "id": "3.3",
+          "kind": "action",
+          "primitive": "log",
+          "params": {"message": "地图词缀达标，已通过"},
+          "on_error": "retry",
+          "delay_ms": 0
+        }
+      ],
+      "else_steps": [
+        {
+          "id": "3.4",
+          "kind": "action",
+          "primitive": "log",
+          "params": {"message": "非稀有地图，跳过重铸"},
+          "on_error": "retry",
+          "delay_ms": 0
+        }
+      ],
+      "on_error": "retry",
+      "delay_ms": 0
+    }
+  ]
+}

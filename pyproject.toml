@@ -5,10 +5,10 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "poe-workflow"
 version = "0.1.0"
-description = "Standalone workflow orchestration engine (extracted from poe-mapmaker, Phase 1: pure-Python core)"
+description = "Standalone workflow orchestration engine + PyQt5 UI cluster (extracted from poe-mapmaker, Phase 1 core + Phase 2a UI)"
 readme = "README.md"
 requires-python = ">=3.9"
-# Phase 1 内核为零依赖纯 Python；PyQt5 仅 UI 层（Phase 2 抽取）需要。
+# 内核为零依赖纯 Python；PyQt5 仅 UI 层（Phase 2a 迁入的 ui/ 子包）需要。
 dependencies = []
 
 [project.optional-dependencies]
@@ -17,3 +17,7 @@ ui = ["PyQt5>=5.15"]
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["poe_workflow*"]
+exclude = ["poe_workflow.tests", "poe_workflow.tests.*"]
+
+[tool.setuptools.package-data]
+poe_workflow = ["workflows/*.json"]
