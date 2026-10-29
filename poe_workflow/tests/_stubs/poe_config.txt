@@ -1,0 +1,16 @@
+[General]
+visual_style = dark
+
+[Workflow]
+run_hotkey =
+
+[Runtime]
+clipboard_empty_limit = 5
+tab_recover_retries = 3
+
+[StashMapping]
+currency_stash = 1
+finished_map_stash = 2
+semi_finished_stash = 3
+flawed_map_stash = 4
+waste_map_stash = 5

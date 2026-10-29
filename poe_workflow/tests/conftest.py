@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
-"""pytest 全局夹具（poe-mapmaker v3.0.30 回归基线）
+"""pytest 全局夹具（poe-workflow 自包含基线，不依赖 poe-mapmaker / POE_MAPMAKER_ROOT）
 
 职责：
-  1. 把仓库根加入 sys.path，测试文件可直接 import modules.* / ui.*
-  2. 强制 Qt 走 offscreen 平台，无显示环境下也能构造控件
-  3. 用仓库 poe_config.txt 的**临时副本**构造 ConfigManager —— 绝不写仓库原文件
+  1. 把仓库内 tests/_stubs 加入 sys.path 最前，使 `import modules.*` / `import ui.*`
+     解析到仓库内的桩实现，而不是宿主机上的 poe-mapmaker。
+  2. 强制 Qt 走 offscreen 平台，无显示环境下也能构造控件。
+  3. 用 _stubs/poe_config.txt 的**临时副本**构造 ConfigManager —— 绝不写原文件。
   4. 提供 ConfigManager→CoordinateEngine→InputSimulator→AffixParser→StateMachine
-     的完整依赖链夹具（与 main.py 的真实装配顺序一致）
+     的完整依赖链夹具（与 main.py 的真实装配顺序一致），全部来自桩 modules。
 
-问题编号遵循 poe_ai_rules.md 注意5（V{版本}-{类别}-{序号}），
-用例内以 docstring 标注迁移来源与台账编号。
+迁移说明（Task #171）：原实现把 poe-mapmaker 仓库根加入 sys.path 并直接 import
+modules.* / ui.*；现全部由 _stubs/modules、_stubs/ui 提供，POE_MAPMAKER_ROOT 已移除。
 """
 import os
 import shutil
@@ -18,23 +19,37 @@ from types import SimpleNamespace
 
 import pytest
 
-REPO_ROOT = os.environ.get("POE_MAPMAKER_ROOT", r"E:\AIProgram\poe-mapmaker")
-if REPO_ROOT not in sys.path:
-    sys.path.insert(0, REPO_ROOT)
+# ── 自包含桩路径：必须在本文件任何 `import modules` / `import ui` 之前插入 ──
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_STUBS_DIR = os.path.join(_THIS_DIR, "_stubs")
+
+
+def _to_native(path):
+    """Windows 下把 MSYS/Git-Bash 风格的 /e/foo 归一为 E:/foo，
+    使深层目录也能被 import 可靠解析（不同运行环境的路径形式不统一）。"""
+    if os.name == "nt" and path.startswith("/") and len(path) > 2 and path[2] == "/":
+        return f"{path[1].upper()}:/{path[3:]}"
+    return path
+
+
+_STUBS_DIR = _to_native(_STUBS_DIR)
+if _STUBS_DIR not in sys.path:
+    sys.path.insert(0, _STUBS_DIR)
 
 # 必须在任何 QApplication 构造之前设置：
 # Qt 平台插件在 QApplication 构造期解析，import 期不读该变量。
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-# 只读使用的仓库原始配置；所有测试都基于它的临时副本，禁止直接写入。
-REAL_CONFIG = os.path.join(REPO_ROOT, "poe_config.txt")
+# 只读使用的桩自带配置；所有测试都基于它的临时副本，禁止直接写入。
+REAL_CONFIG = os.path.join(_STUBS_DIR, "poe_config.txt")
 
-# ── 防御：禁止任何测试写真实 poe_config.txt（防偶发污染用户真实配置）──
+# ── 防御：禁止任何测试写真实桩配置文件（防偶发污染）──
 import traceback as _tb
 from modules.config_manager import ConfigManager as _CM
 _orig_atomic_save = _CM._atomic_save
 def _guarded_atomic_save(self):
-    if os.path.abspath(self._config_path) == os.path.abspath(REAL_CONFIG):
+    if self._config_path is not None and \
+       os.path.abspath(self._config_path) == os.path.abspath(REAL_CONFIG):
         _tb.print_stack()
         raise RuntimeError(
             f"[测试隔离守卫] 拦截到对真实配置文件 {self._config_path} 的写盘，"
@@ -45,16 +60,10 @@ _CM._atomic_save = _guarded_atomic_save
 
 
 def make_temp_config(dst_dir: str) -> str:
-    """把仓库 poe_config.txt 复制到 dst_dir，返回副本绝对路径。
+    """把桩 poe_config.txt 复制到 dst_dir，返回副本绝对路径。
 
     V3031-QF-003：复制后**按纯文本**剥离运行期用户数据段 [QuickFilter]。
-    开发者本机的 poe_config.txt 常带有个人快捷筛选配置（甚至是旧版预置的名字，
-    如「物品数量0~79」），原样拷贝会让依赖「空配置 -> 注入 5 条预置」的用例
-    失真（filter_count 读到 6 而非 5）。测试基线必须确定，不能随本机配置漂移。
-
-    ⚠️ 必须用纯文本处理，不能用 configparser 读原文件：poe_config.txt 含词缀段等
-    原始文本行（如「几率避免元素异常」这类无 key=value 的行），configparser 直接读会
-    ParsingError；ConfigManager 是自行 _strip_affix_sections() 之后才交给它解析的。
+    （桩自带配置不含该段，此逻辑保留以兼容未来换入更完整的配置副本。）
     """
     dst = os.path.join(dst_dir, "poe_config.txt")
     shutil.copy2(REAL_CONFIG, dst)
@@ -78,7 +87,7 @@ def make_temp_config(dst_dir: str) -> str:
 
 
 def build_stack(config_path: str) -> SimpleNamespace:
-    """按 main.py:349-352 的真实装配顺序构建完整依赖链。"""
+    """按 main.py 的真实装配顺序构建完整依赖链（全部来自桩 modules）。"""
     from modules.config_manager import ConfigManager
     from modules.coordinate_engine import CoordinateEngine
     from modules.input_simulator import InputSimulator
@@ -104,7 +113,7 @@ def teardown_stack(stack: SimpleNamespace) -> None:
 
 @pytest.fixture
 def config_manager(tmp_path):
-    """裸 ConfigManager：基于 poe_config.txt 的临时副本构造。"""
+    """裸 ConfigManager：基于桩 poe_config.txt 的临时副本构造。"""
     from modules.config_manager import ConfigManager
     return ConfigManager(make_temp_config(str(tmp_path)))
 
