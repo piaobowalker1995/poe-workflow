@@ -275,17 +275,23 @@ def _release_at(canvas, vp):
 def _drag_to_scene(canvas, vp, tx, ty):
     """把拖动中的节点落到**场景坐标** (tx, ty) 并释放。
 
-    坐标口径（A4 起所有拖拽测试共用）：mouseMoveEvent 里
-    ``raw = _drag_origin + (event.pos() - _drag_origin)``，_drag_origin 在
-    加减中抵消 → 节点最终落点 = 释放前的**鼠标视口位置**（视口坐标被当作
-    场景坐标用）。因此要让节点落到场景 (tx, ty)，鼠标视口位置就须是
-    (tx, ty)——与 mapFromScene 的对齐/滚动偏移无关（offscreen 下偏移可达
-    (+6,+189)，只按场景位移量算 dx 会把节点甩出目标区，见
-    tests/test_workflow_canvas_cross_move.py 的坐标口径用例）。
+    坐标口径（A-1 修复后）：mouseMoveEvent 全程在场景空间运算，节点保持按下时
+    的抓取偏移（grab = 按下时光标场景坐标 - 节点场景坐标），故
+    ``node_new = release_scene - grab``。要让节点落到场景 (tx, ty)，须令
+    ``release_scene = (tx, ty) + grab``，再由 mapFromScene 反推鼠标视口位置。
+    grab 取画布在按下时记录的 ``_drag_grab``（scene 空间），与对齐/滚动偏移无关
+    （offscreen 下偏移可达 (+6,+189)，旧口径直接把视口当场景会甩偏）。
     tx/ty 取 16 的整数倍可避开网格吸附偏移；与兄弟左缘保持 >6px 避开对齐吸附。
     """
-    _move_held_at(canvas, vp, dx=int(tx - vp.x()), dy=int(ty - vp.y()))
-    _release_at(canvas, vp)
+    grab = canvas._drag_grab
+    from PyQt5.QtCore import QEvent, QPointF, Qt
+    from PyQt5.QtGui import QMouseEvent
+    target_scene = QPointF(tx, ty) + grab
+    release_vp = canvas.mapFromScene(target_scene)
+    ev = QMouseEvent(QEvent.MouseMove, release_vp, Qt.NoButton, Qt.LeftButton,
+                     Qt.NoModifier)
+    canvas.mouseMoveEvent(ev)
+    _release_at(canvas, release_vp)
 
 
 def _press_at_scene(canvas, scene_x, scene_y):

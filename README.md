@@ -92,8 +92,8 @@ pytest poe_workflow/tests/  # 35 个 test_workflow_*.py，505 用例
 - 引擎层以注入式伪对象驱动，无需真实游戏窗口即可全量回归；
 - UI 层测试在 `poe_workflow/tests/conftest.py` 下强制 `QT_QPA_PLATFORM=offscreen`，
   并复用宿主 `poe_config.txt` 的临时副本来构造 `ConfigManager`（绝不写真实配置）；
-- 测试直接 `import modules.*` / `ui.tab_system` 等宿主模块作为夹具——因此运行本仓测试时
-  需将 poe-mapmaker 仓库根加入 `PYTHONPATH`（后续可改为本仓内置 mock 夹具以彻底解耦）。
+- 测试经 `tests/_stubs` 内置桩自包含，无需 poe-mapmaker 仓库；直接
+  `QT_QPA_PLATFORM=offscreen pytest poe_workflow/tests -q` 即可全量回归（505 用例）。
 
 ## License
 

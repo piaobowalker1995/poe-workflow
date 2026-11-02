@@ -24,6 +24,7 @@ from ..workflow_model import (
 )
 from .theme import DEFAULT_THEME
 from .workflow_canvas import WorkflowCanvasView
+from .workflow_palette import _subworkflow_display_name
 
 logger = logging.getLogger(__name__)
 
@@ -484,12 +485,16 @@ class WorkflowCanvasTab(QWidget):
 
     def _refresh_schemes(self):
         schemes = self._scan_schemes()
-        prev = self._combo.currentText()
+        prev = self._combo.currentData()  # 已选项 = 文件名（userData），而非中文显示文本
         self._combo.blockSignals(True)
         self._combo.clear()
-        self._combo.addItems(schemes)
-        if prev and prev in schemes:
-            self._combo.setCurrentText(prev)
+        for fn in schemes:
+            stem = fn[:-5] if fn.lower().endswith(".json") else fn
+            self._combo.addItem(_subworkflow_display_name(_WORKFLOWS_DIR, stem), fn)
+        if prev is not None and prev in schemes:
+            idx = self._combo.findData(prev)
+            if idx >= 0:
+                self._combo.setCurrentIndex(idx)
         self._combo.blockSignals(False)
 
     def _on_combo_changed(self, name):
@@ -508,7 +513,7 @@ class WorkflowCanvasTab(QWidget):
             steps = getattr(self._workflow_tab, "_steps_dicts", None)
             if steps:
                 return steps
-        name = self._combo.currentText()
+        name = self._combo.currentData()  # 文件名（userData），而非中文显示文本
         if not name:
             return []
         path = os.path.join(_WORKFLOWS_DIR, name)
@@ -529,7 +534,9 @@ class WorkflowCanvasTab(QWidget):
         # 各算一份——规则漂移时画布后执行会静默覆盖 dict 里的 id，而卡片
         # 标题用列表侧旧值，两边不一致且无报错。
         remap_jump_targets(steps, assign_step_ids(steps))
-        self._canvas.set_theme(self._theme_key())
+        # A-5：set_theme 内部在 _steps 非空时会强制 set_steps 重建场景；此处
+        # 令其仅切换配色（rebuild=False），由下方 set_steps 统一重建一次，避免重复重建。
+        self._canvas.set_theme(self._theme_key(), rebuild=False)
         self._canvas.set_steps(steps)
         n = self._canvas.node_count()
         mode = "可编辑" if self._canvas.is_editable() else "只读"

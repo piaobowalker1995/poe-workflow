@@ -43,6 +43,7 @@ from ._constants import SEC_COORD_CUR
 from .text_resources import TextResources
 from .workflow_canvas_model import CanvasModel
 from .theme import DEFAULT_THEME, get_canvas_colors
+from .workflow_palette import _subworkflow_display_name
 
 logger = logging.getLogger(__name__)
 
@@ -1468,7 +1469,8 @@ class StepCard(QWidget):
         schemes = self._tab._scan_schemes() if hasattr(self._tab, "_scan_schemes") else []
         for fn in schemes:
             stem = fn[:-5] if fn.lower().endswith(".json") else fn
-            jt.addItem(f"模块: {stem}", stem)
+            # 显示中文名，文件名（stem）作为 userData 保留（跳转目标以文件名为键）
+            jt.addItem(f"模块: {_subworkflow_display_name(_WORKFLOWS_DIR, stem)}", stem)
         cur = self._d.get("jump_target", "")
         if cur:
             idx = jt.findData(cur)
@@ -1866,31 +1868,42 @@ class WorkflowTab(QWidget):
 
     def _refresh_schemes(self):
         schemes = self._scan_schemes()
-        prev = self._combo.currentText()
+        prev = self._combo.currentData()  # 已选项 = 文件名（userData），而非中文显示文本
         self._combo.blockSignals(True)
         self._combo.clear()
-        self._combo.addItems(schemes)
-        if prev and prev in schemes:
-            self._combo.setCurrentText(prev)
+        for fn in schemes:
+            stem = fn[:-5] if fn.lower().endswith(".json") else fn
+            self._combo.addItem(_subworkflow_display_name(_WORKFLOWS_DIR, stem), fn)
+        if prev is not None and prev in schemes:
+            idx = self._combo.findData(prev)
+            if idx >= 0:
+                self._combo.setCurrentIndex(idx)
         self._combo.blockSignals(False)
         if schemes and not self._current_path:
             self._load_file(schemes[0])
 
     def _on_combo_changed(self, name):
+        # name 是 currentTextChanged 传来的显示文本（中文名），真实 key 以
+        # userData（文件名）为准，故直接读 currentData。
+        name = self._combo.currentData()
         if not name:
             return
         # C1 未保存保护：切换方案前先确认（保存/丢弃/取消）；取消则回退下拉
         if not self._confirm_discard():
             if self._current_path:
-                self._combo.blockSignals(True)
-                self._combo.setCurrentText(os.path.basename(self._current_path))
-                self._combo.blockSignals(False)
+                cur = os.path.basename(self._current_path)
+                idx = self._combo.findData(cur)
+                if idx >= 0:
+                    self._combo.blockSignals(True)
+                    self._combo.setCurrentIndex(idx)
+                    self._combo.blockSignals(False)
             return
         self._load_file(name)
 
     def _mark_scheme_bad(self, name):
         """下拉项标红：提示该方案文件无法加载（坏 json / 非法结构）。"""
-        idx = self._combo.findText(name)
+        # name 是文件名（userData），显示文本是中文名，故按 userData 查找。
+        idx = self._combo.findData(name)
         if idx >= 0:
             # 阻塞信号：setItemData 作用于「当前项」时会由 Qt 重发 currentTextChanged，
             # 否则会递归触发 _on_combo_changed → _load_file → … 死循环。
@@ -1901,7 +1914,7 @@ class WorkflowTab(QWidget):
 
     def _mark_scheme_ok(self, name):
         """清除下拉项标红。"""
-        idx = self._combo.findText(name)
+        idx = self._combo.findData(name)
         if idx >= 0:
             self._combo.blockSignals(True)
             self._combo.setItemData(idx, None, Qt.ForegroundRole)
@@ -2383,9 +2396,12 @@ class WorkflowTab(QWidget):
             self._clear_dirty()           # 落盘即与磁盘一致；先清 dirty 再刷新下拉，避免触发二次保存确认
             self._set_editor_status(f"已保存: {os.path.basename(path)}", "ok")
             self._refresh_schemes()
-            # 阻塞信号：避免 setCurrentText 重发 currentTextChanged，递归触发 _on_combo_changed
+            # 阻塞信号：避免 setCurrentIndex 重发 currentIndexChanged，
+            # 递归触发 _on_combo_changed；按文件名 userData 定位已保存项。
             self._combo.blockSignals(True)
-            self._combo.setCurrentText(os.path.basename(path))
+            idx = self._combo.findData(os.path.basename(path))
+            if idx >= 0:
+                self._combo.setCurrentIndex(idx)
             self._combo.blockSignals(False)
         except Exception as e:
             self._set_editor_status(f"保存失败: {e}", "error")

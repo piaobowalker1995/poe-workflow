@@ -37,11 +37,10 @@ QT_QPA_PLATFORM=offscreen pytest poe_workflow/tests/
 - `conftest.py` 在任何 `QApplication` 构造前 `os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")`，无显式设置时也会回落 offscreen。
 - **引擎层单测无需 GUI**：用注入式伪对象（`SimpleNamespace` / mock）驱动 `WorkflowEngine`，不依赖真实窗口。
 - **UI 层测试**：依赖 `conftest` 的 `stack` / `ui_stack` 夹具，复用宿主 `poe_config.txt` 的**临时副本**构造 `ConfigManager`，并对 `ConfigManager._atomic_save` 打补丁——**任何对真实配置文件的写盘都会被拦截并抛 RuntimeError**（测试隔离守卫）。
-- **路径依赖**：`conftest` 默认把 `E:\AIProgram\poe-mapmaker` 加入 `sys.path`（可用环境变量 `POE_MAPMAKER_ROOT` 覆盖），因为用例会 `import modules.*` / `ui.tab_system` 等宿主模块。运行本仓测试前需保证该路径存在，或将 `POE_MAPMAKER_ROOT` 指向你的 poe-mapmaker 仓库根。
+- **自包含**：测试经 `tests/_stubs` 内置桩自包含，无需 poe-mapmaker 仓库；直接
+  `QT_QPA_PLATFORM=offscreen pytest poe_workflow/tests -q` 即可全量回归。
 
 > [FAIL] 若未设 `QT_QPA_PLATFORM=offscreen` 且环境无显示器（CI/服务器），UI 用例会因无法初始化 Qt 平台插件而失败。务必显式带该环境变量。
->
-> [FAIL] 若 `PYTHONPATH`/`POE_MAPMAKER_ROOT` 未指向有效 poe-mapmaker 仓库，集成/UI 类用例 import 失败。后续计划改为本仓内置 mock 夹具以彻底解耦。
 
 ### 2.1 只跑引擎层（最快回归）
 
@@ -106,4 +105,5 @@ QT_QPA_PLATFORM=offscreen pytest poe_workflow/tests/ -k "engine or phase or mode
   2. 新增原语/条件源若主机未实现对应宿主方法，引擎以容错（可选能力缺失跳过 / 降级）处理，但**新原语的语义**需宿主配合（如新 `use_currency` 参数）。
 - **发版建议**：本仓与 poe-mapmaker 同步打 tag；改动 `protocols.py` 或 `workflow_model` 的 `ActionStep`/`WorkflowDef` 字段属**破坏性变更**，须 bump `schema_version` 并在两仓同步验证。
 
-> [WARN] 本仓测试仍 `import modules.*`（宿主）作为夹具，因此**本仓测试通过 ≠ 宿主可独立**。改动宿主坐标/输入契约时，须回到 poe-mapmaker 端回归工作流相关用例。
+> 本仓测试经 `tests/_stubs` 内置桩自包含（不再 `import` 宿主模块），直接跑即可全量回归；
+> 但**本仓测试通过 ≠ 宿主可独立**——改动宿主坐标/输入契约时，仍须回到 poe-mapmaker 端回归工作流相关用例。

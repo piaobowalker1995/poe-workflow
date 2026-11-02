@@ -2,10 +2,10 @@
 """工作流画布 A4 收尾：画布跨容器搬运（顶层↔容器、body→then、then→else）。
 
 覆盖：
-- 坐标口径：mouseMoveEvent 的落点 = 释放前鼠标**视口**位置
-  （raw = _drag_origin + (event.pos() - _drag_origin)，前者被抵消），
-  与 mapFromScene 的对齐/滚动偏移无关——所有拖拽落点统一经
-  _drag_to_scene 按场景坐标精确合成
+- 坐标口径（A-1 修复后）：mouseMoveEvent 全程在**场景空间**运算，节点保持按下时的
+  抓取偏移（grab = 按下时光标场景坐标 - 节点场景坐标），`node_new = release_scene - grab`，
+  故缩放/平移后落点仍在场景空间、不瞬移到光标处；与 mapFromScene 的对齐/滚动偏移无关——
+  所有拖拽落点统一经 _drag_to_scene 按场景坐标精确合成
 - 命中区几何：loop body / branch then|else 的命中区横向覆盖整个组框
   （含左右内边距）——「拖到区首/区尾」几何可达（旧口径把边距排除在
   区外，落在首子节点左缘左侧即出区、被判成拖出容器）
@@ -101,24 +101,56 @@ def _live_cards(wf):
 
 # ── 坐标口径 ─────────────────────────────────────────────────────────────────
 
-def test_drag_landing_equals_viewport_pos(qapp):
-    """口径锁定：节点最终落点 = 释放前鼠标视口位置（视口坐标当场景坐标用）。
+def test_drag_landing_preserves_grab_offset(qapp):
+    """口径锁定（A-1 修复后）：节点随光标平移、保持按下时的抓取偏移，不瞬移到光标处。
 
-    offscreen 下 mapFromScene 有 (+6,+189) 偏移、视口还被钳制到 638x478
-    （虚拟屏限制），只按「场景位移量」算 dx/dy 会把节点甩出目标区——
-    既有 4 个区改序测试正是因此只在 x 方向拖拽。本用例把该口径显式锁定，
-    所有后续拖拽测试统一走 _drag_to_scene（目标视口位置 = 目标场景坐标）。
+    即 ``node_new = node_press + 光标场景位移量``（与视口的 (viewport-as-scene)
+    旧口径不同）。旧口径把视口坐标当场景坐标、且让节点左上角瞬移到光标处；新口径
+    全程在场景空间运算并保留抓取点，缩放/平移后落点判定仍一致。
     """
     from test_workflow_canvas_edit import (
         _press_node, _move_held_at, _release_at)
+    from PyQt5.QtCore import QPointF
     v = _view(qapp, [_leaf("1"), _leaf("2")])
     node = v._node_by_id["1"]
     vp = _press_node(v, node)
+    before = node.pos()
     # (192, 288) 均为 16 的整数倍（避开网格吸附）；与兄弟左缘 254 距离 >6
-    _move_held_at(v, vp, dx=192 - vp.x(), dy=288 - vp.y())
-    assert node.pos().x() == 192.0 and node.pos().y() == 288.0, \
-        f"落点口径不是鼠标视口位置：{node.pos()}"
+    dx, dy = 192 - vp.x(), 288 - vp.y()
+    _move_held_at(v, vp, dx=dx, dy=dy)
+    # 抓取偏移保留：节点随光标平移，位移量 = 光标视口位移量（无缩放时场景位移同），
+    # 最终位置再经网格吸附（与旧口径节点左上角瞬移到光标处不同）。
+    tx = v._snap_to_grid(before.x() + dx)
+    ty = v._snap_to_grid(before.y() + dy)
+    assert node.pos() == QPointF(tx, ty), \
+        f"拖动未保持抓取偏移：press={before} delta=({dx},{dy}) 落点={node.pos()}"
     _release_at(v, vp)      # release 会 auto_layout 重建场景，须最后调用
+
+
+def test_drag_under_zoom_lands_in_scene_space(qapp):
+    """A-1 回归：2x 缩放下拖动，节点落点仍在场景空间、不瞬移到视口坐标。
+
+    修复前 mouseMoveEvent 把 ``event.pos()``（视口坐标）直接当场景坐标用：
+    缩放下 mapToScene 不再是恒等变换，节点会落到错误位置（误投）。修复后全程
+    在场景空间运算（``setPos(mapToScene(event.pos()) - grab)``），缩放/平移一致。
+    此处只校验 press+move 后的落点（release 会 auto_layout 重建，故不释放）。
+    """
+    from test_workflow_canvas_edit import _press_node
+    from PyQt5.QtCore import QEvent, QPointF, Qt
+    from PyQt5.QtGui import QMouseEvent
+    v = _view(qapp, [_leaf("1"), _leaf("2")])
+    v.scale(2.0, 2.0)                      # 2x 缩放：放大变换
+    vp = _press_node(v, v._node_by_id["1"])
+    grab = v._drag_grab
+    # 期望节点落到场景 (320, 96)（16 的倍数，避开网格吸附偏移；且与兄弟左缘 >6px）
+    target_scene = QPointF(320.0, 96.0) + grab
+    release_vp = v.mapFromScene(target_scene)
+    ev = QMouseEvent(QEvent.MouseMove, release_vp, Qt.NoButton, Qt.LeftButton,
+                     Qt.NoModifier)
+    v.mouseMoveEvent(ev)
+    node = v._node_by_id["1"]
+    assert node.pos() == QPointF(320.0, 96.0), \
+        f"缩放下落点未落在场景空间：{node.pos()}"
 
 
 # ── 命中区几何（组框横向全覆盖）─────────────────────────────────────────────

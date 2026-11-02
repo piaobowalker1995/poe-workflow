@@ -80,7 +80,7 @@ WorkflowDialog(QDialog)                         # dialog_workflow.py
     └── WorkflowEditorPanel                    # 选中步骤的参数编辑抽屉
 ```
 
-`WorkflowDialog` 复用与 `MainWindow` 同名的 `set_right_drawer_widget` / `set_right_drawer_visible` 两个 API，`WorkflowTab.showEvent` 通过 `hasattr(self.window(), ...)` 守卫调用，因此 `WorkflowTab` / `WorkflowEditorPanel` **零改动**即可在弹窗内工作（见 `dialog_workflow.py:14-18`, `tab_workflow.py:1742-1748`）。
+`WorkflowDialog` 复用与 `MainWindow` 同名的 `set_right_drawer_widget` / `set_right_drawer_visible` 两个 API，`WorkflowTab.showEvent` 的 `hasattr(self.window(), ...)` 守卫调用，因此 `WorkflowTab` / `WorkflowEditorPanel` **零改动**即可在弹窗内工作（见 `dialog_workflow.py:14-18`，守卫逻辑位于 `WorkflowTab.showEvent` 的 `hasattr(window(), ...)` 守卫）。
 
 ---
 
@@ -134,7 +134,7 @@ WorkflowDialog(QDialog)                         # dialog_workflow.py
 
 ### 4.1 操作符 `op`
 
-`CONDITION_OPS = {contains, equals, nequals, gt, lt, ge, le}`（`workflow_model.py:38`）。比较在 `_cmp`（`:599`）：`gt/lt/ge/le` 走整型；`contains` 走子串；`equals/nequals` 默认字符串、整型可选（`coerce_int`，`counter` 源启用）。
+`CONDITION_OPS = {contains, equals, nequals, gt, lt, ge, le}`（`workflow_model.py:38`）。比较在 `_cmp`（`:600`）：`gt/lt/ge/le` 走整型；`contains` 走子串；`equals/nequals` 默认字符串、整型可选（`coerce_int`，`counter` 源启用）。
 
 ### 4.2 组合条件
 
@@ -256,7 +256,7 @@ WorkflowDialog(QDialog)                         # dialog_workflow.py
 
 ---
 
-> TODO（待确认）：`ui/tab_workflow.py` 的 `WorkflowTab._on_run`（约 2443 行处 `def _scheme_loader(name):`）的模块文件解析路径，本文按 `dialog_workflow._WORKFLOWS_DIR`（`poe_workflow/workflows/`）与 `ModulePalette._scan_subworkflows` 的扫描口径推断为 `workflows/<name>.json`。该闭包本体未逐行通读，若实际解析路径（如带额外前缀或走宿主配置）与此不同，需以 `_on_run` 源码为准修正 §5.3 / §6 / `ops.md §3` 的描述。
+> 已确认：`ui/tab_workflow.py` 的 `WorkflowTab._on_run`（位于 `tab_workflow.py:2443` 处的 `def _scheme_loader(name):` 闭包）模块文件解析路径即 `workflows/<name>.json`，与 `dialog_workflow._WORKFLOWS_DIR`（`poe_workflow/workflows/`）及 `ModulePalette._scan_subworkflows` 的扫描口径一致，本文 §5.3 / §6 / `ops.md §3` 描述无误。
 
 ## 9. 测试布局
 
@@ -269,9 +269,8 @@ WorkflowDialog(QDialog)                         # dialog_workflow.py
   - `stack(tmp_path)`：函数级完整依赖链 `ConfigManager→CoordinateEngine→InputSimulator→AffixParser→StateMachine`，与 `main.py` 装配顺序一致。
   - `ui_stack(tmp_path_factory)`：模块级依赖链（MainWindow 构造成本高，同模块复用）。
 - **隔离守卫**：`conftest` 给 `ConfigManager._atomic_save` 打补丁，任何对真实 `poe_config.txt` 的写盘都会被拦截并抛 `RuntimeError`（防测试污染用户真实配置）。
-- **路径依赖**：`conftest` 默认把 `E:\AIProgram\poe-mapmaker` 加入 `sys.path`（可用 `POE_MAPMAKER_ROOT` 环境变量覆盖），因为测试会 `import modules.*` / `ui.tab_system` 等宿主模块作为夹具。后续可改为本仓内置 mock 以彻底解耦。
-
-> [WARN] 运行本仓测试需保证 poe-mapmaker 仓库根在 `PYTHONPATH`（或设 `POE_MAPMAKER_ROOT`）；否则 UI/集成类用例的 import 会失败。
+- **自包含**：测试经 `tests/_stubs` 内置桩自包含，无需 poe-mapmaker 仓库；直接
+  `QT_QPA_PLATFORM=offscreen pytest poe_workflow/tests -q` 即可全量回归。
 
 ---
 

@@ -20,6 +20,8 @@ PyQt5 QGraphicsView 上的嵌套组框 + 流程箭头。
 """
 from __future__ import annotations
 
+import os
+
 from typing import Any, Dict, List, Optional, Tuple
 
 from PyQt5.QtCore import Qt, QRectF, QPointF, pyqtSignal
@@ -30,7 +32,11 @@ from PyQt5.QtWidgets import (
 
 from .text_resources import TextResources
 from .theme import get_canvas_colors
-from .workflow_palette import PaletteItemButton
+from .workflow_palette import PaletteItemButton, _subworkflow_display_name
+
+# workflows/ 位于仓库根目录（ui/ 的上一级）；仅供子工作流节点标题做中文名解析。
+_WORKFLOWS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "workflows")
 
 # ── 布局常量（Q4：步骤横向、容器纵向）──
 NODE_W = 168.0          # 叶子节点宽
@@ -342,13 +348,17 @@ class WorkflowCanvasView(QGraphicsView):
         self._theme_key = "light"
         self._colors = get_canvas_colors(self._theme_key)
         self._node_by_id: Dict[str, CanvasNode] = {}
+        self._node_by_step: Dict[int, CanvasNode] = {}
         self._steps: List[Dict[str, Any]] = []
         self._edges: List[ConnectionEdge] = []
 
         # ── 阶段3 可编辑状态 ──
         self._editable = False
         self._drag_node: Optional[CanvasNode] = None
-        self._drag_origin: QPointF = QPointF()
+        self._drag_step: Optional[int] = None
+        # A-1：抓取点在场景坐标下的偏移（按下时固定），拖动中保持，
+        # 使节点随光标平移而不瞬移到光标处；缩放/平移后落点计算仍在场景空间。
+        self._drag_grab: QPointF = QPointF()
         self._guide: Optional[AlignGuide] = None
         self._clicked_id = ""      # 最近一次点击/选中的 step id（Delete 用）
         self._sub_loader = None    # 子工作流读取器（阶段4：Q3 只读预览）
@@ -378,11 +388,12 @@ class WorkflowCanvasView(QGraphicsView):
         return self._editable
 
     # ------------------------------------------------------------------ #
-    def set_theme(self, key: str) -> None:
+    def set_theme(self, key: str, rebuild: bool = True) -> None:
         self._theme_key = key if key in ("light", "dark") else "light"
         self._colors = get_canvas_colors(self._theme_key)
         self._scene.setBackgroundBrush(QBrush(QColor(self._colors["canvas_bg"])))
-        if self._steps:
+        # rebuild=False 时仅切换配色、不重排场景（A-5：避免与后续 set_steps 重复重建）。
+        if rebuild and self._steps:
             self.set_steps(self._steps)
 
     def set_subworkflow_loader(self, loader) -> None:
@@ -420,6 +431,7 @@ class WorkflowCanvasView(QGraphicsView):
         self._steps = steps or []
         self._scene.clear()
         self._node_by_id = {}
+        self._node_by_step = {}
         self._edges = []
         cursor_x, cursor_y = 30.0, 30.0
         for d in self._steps:
@@ -461,7 +473,7 @@ class WorkflowCanvasView(QGraphicsView):
             # 的子工作流（P4-A 一等公民）。二者都以 SubWorkflowNode 呈现、按
             # jump_target 预览模块内部结构。
             node = SubWorkflowNode(d, self._colors,
-                                   f"子工作流：{d.get('jump_target')}", sub)
+                                   f"子工作流：{_subworkflow_display_name(_WORKFLOWS_DIR, d.get('jump_target'))}", sub)
             # 预览态按 **step dict** 身份比对（重建后图元对象已换新）
             if self._preview_owner is not None and self._preview_owner[0] is d:
                 node.set_expanded(True)
@@ -626,6 +638,10 @@ class WorkflowCanvasView(QGraphicsView):
         # 节点计数（node_count 恢复只算主流程）。
         if sid and not getattr(node, "_is_preview", False):
             self._node_by_id.setdefault(sid, node)
+            # A-2：额外按 step dict 身份（id，dict 本身不可哈希）建索引，重建后
+            # 可用 dict 身份（而非易变的位置字符串 id）重新解析存活节点，拖动
+            # 重建后不丢节点。
+            self._node_by_step[id(node.step)] = node
 
     def select_step(self, step_id: str) -> None:
         """按 step id 高亮节点（列表→画布联动）。"""
@@ -813,6 +829,9 @@ class WorkflowCanvasView(QGraphicsView):
         # 重建场景并销毁全部图元）
         step_id = node.step_id
         self._clicked_id = step_id
+        # A-2：记下本节点的 step dict 身份（id），重建后据此（而非位置字符串 id）
+        # 重新解析存活节点，避免拖动期间重建丢节点。
+        self._drag_step = id(node.step)
         # ⚠️ stepClicked 与 toggle_subworkflow 都会**同步**触发场景重建：
         #   stepClicked → focus_step_by_id → _rebuild_cards
         #     → _notify_canvas_changed → refresh_from_workflow → set_steps
@@ -828,14 +847,18 @@ class WorkflowCanvasView(QGraphicsView):
         if isinstance(sub_node, SubWorkflowNode):
             self.toggle_subworkflow(sub_node)
         if self._editable:
-            # 所有同步重建均已结束，此时按 id 取到的才是存活的最终图元。
+            # 所有同步重建均已结束，此时按 step dict 身份取到的才是存活的
+            # 最终图元（位置字符串 id 在重建后会漂移，不可靠）。
             # 若取不到（异常路径）则放弃本次拖动：mouseMoveEvent 有 None 守卫。
-            final = self._node_by_id.get(step_id)
+            final = self._node_by_step.get(self._drag_step)  # 按 step dict 身份解析
             self._drag_node = final
             if final is not None:
                 final.setSelected(True)
                 final.setZValue(900)      # 拖动中置顶
-                self._drag_origin = final.pos()
+                # A-1：在场景坐标下记录抓取偏移（光标场景坐标 - 节点场景坐标），
+                # 拖动全程保持，使节点随光标平移而非瞬移到光标处；缩放/平移后
+                # 落点计算仍在场景空间，修正误投。
+                self._drag_grab = self.mapToScene(event.pos()) - final.pos()
 
     def mouseMoveEvent(self, event):
         if self._panning and self._pan_last is not None:
@@ -849,10 +872,14 @@ class WorkflowCanvasView(QGraphicsView):
         if not self._editable or self._drag_node is None:
             super().mouseMoveEvent(event)
             return
-        delta = event.pos() - self._drag_origin.toPoint()
-        raw_x = self._drag_origin.x() + delta.x()
-        raw_y = self._drag_origin.y() + delta.y()
-        x, y = self._apply_snap(self._drag_node, raw_x, raw_y)
+        # A-1：全程在场景坐标空间运算。取光标场景坐标，减去按下时记录的抓取
+        # 偏移（场景空间 = 按下时光标场景坐标 - 节点场景坐标），使抓取点始终
+        # 跟随光标、节点随光标平移而不瞬移到光标处；缩放/平移后落点区域判定
+        # （同为场景坐标）一致，修正误投。
+        # 推导：node_new = release_scene - grab = release_scene - (press_scene - pos0)
+        #                  = pos0 + (release_scene - press_scene) = pos0 + Δ（Δ 为光标位移）。
+        target = self.mapToScene(event.pos()) - self._drag_grab
+        x, y = self._apply_snap(self._drag_node, target.x(), target.y())
         self._drag_node.setPos(x, y)
 
     def mouseReleaseEvent(self, event):
@@ -890,6 +917,7 @@ class WorkflowCanvasView(QGraphicsView):
                              and self._is_self_or_descendant(sid, dst_parent))
             node.setZValue(0)
             self._drag_node = None
+            self._drag_step = None
             self._clear_guide()
             # 立即恢复自动布局（真实顺序由外部改数据后重建）
             self.auto_layout()

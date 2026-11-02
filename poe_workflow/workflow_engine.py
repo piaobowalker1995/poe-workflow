@@ -572,7 +572,11 @@ class WorkflowEngine:
                 self._log.warning("config 条件源缺少 section/key: %s", cond)
                 return False
             actual = self._cm.get(section, key, "")
-            return self._cmp(str(actual), op, value)
+            # 大小写/空白无关比较：宿主 ConfigManager 可能以 Python str(bool)
+            # 形式持久化 "True"/"False"，需归一化后再比对，否则腐化门控静默失效。
+            return self._cmp(
+                str(actual).strip().lower(), op, str(value).strip().lower()
+            )
         self._log.warning("未知条件 source: %s", src)
         return False
 

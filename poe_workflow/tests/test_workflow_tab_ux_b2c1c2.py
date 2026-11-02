@@ -53,7 +53,8 @@ def test_load_bad_json_shows_consistent_error_and_no_half_load(
     # 2) 不残留半载：steps_dicts 未被坏数据覆盖
     assert tab._steps_dicts == before
     # 3) 下拉项标红（三处提示口径之一：下拉项标红）
-    idx = tab._combo.findText("bad.json")
+    #    文件名现在存于 userData（显示文本为中文名/文件名 stem），故按 userData 查。
+    idx = tab._combo.findData("bad.json")
     assert idx >= 0
     fg = tab._combo.itemData(idx, Qt.ForegroundRole)
     assert isinstance(fg, QColor)
